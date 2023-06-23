@@ -3,8 +3,13 @@
   "description": "Tiktok downloader extension",
   "version": "1.0",
   "manifest_version": 3,
-  "permissions": ["tabs", "activeTab", "downloads", "scripting"],
-  "icons": {},
+  "permissions": ["tabs", "downloads", "scripting"],
+  "icons": {
+    "16": "logo.png",
+    "32": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
   "action": {},
   "content_scripts": [
     {

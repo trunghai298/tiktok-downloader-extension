@@ -51,12 +51,10 @@ const getVideoNoWM = async (url) => {
   return data;
 };
 
-const insertHtml = () => {
-  document
-    .querySelector(".tiktok-10qtkim-DivShareLayoutBase-StyledShareLayoutV2 ")
-    .insertAdjacentHTML(
-      "afterbegin",
-      `<div
+const install = () => {
+  document.querySelector("body").insertAdjacentHTML(
+    "afterbegin",
+    `<div
       class="download-panel"
       style="
         width: 300px;
@@ -93,6 +91,7 @@ const insertHtml = () => {
           top: -5px;
           right: -5px;
           z-index: 1;
+          border-radius: 4px;
         "
       ></div>
       <div
@@ -102,6 +101,7 @@ const insertHtml = () => {
           width: 100%;
           position: absolute;
           z-index: 2;
+          border-radius: 4px;
         "
       ></div>
       <div
@@ -114,11 +114,19 @@ const insertHtml = () => {
           right: 5px;
           z-index: 3;
           padding: 8px;
+          border-radius: 4px;
         "
       >
         <div class="video-found" style="height: 100%">
-          <div class="video-count">Fetching video...</div>
-          <div class="video-list" style="height: 100%; overflow: scroll"></div>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <p class="video-count" style="font-size: 16px; font-weight: 700;">
+              Click load button to start fetching video 
+            </p>
+            <p class="downloaded-count" style="font-size: 16px; font-weight: 700;">
+            </p>
+            <div class="cancel-download"></div>
+          </div>
+          <div class="video-list" style="margin-top: 6px; height: 90%; overflow: scroll"></div>
         </div>
         <div style="width: 80%">
           <button
@@ -133,17 +141,17 @@ const insertHtml = () => {
               right: 50%;
               transform: translate(50%, -50%);
               width: 80%;
+              cursor: pointer;
             "
           >
-            Fetching...
+            Load Video
           </button>
         </div>
       </div>
     </div>`
-    );
+  );
 };
 
-let videoFound = 0;
 const kFormatter = (num) => {
   return Math.abs(num) > 999
     ? Math.sign(num) * (Math.abs(num) / 1000).toFixed(1) + "K"
@@ -173,51 +181,155 @@ const renderListVideo = (data) => {
 };
 
 let interval;
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-  if (request.message === "start") {
-    insertHtml();
-    const closeButton = document.querySelector(".close-button");
-    closeButton.addEventListener("click", () => {
-      document.querySelector(".download-panel").remove();
+let downloadState = "";
+let downloadBtn;
+let cancelDownloadBtn;
+let videoData;
+let downloadedItems = [];
+let nbVideoFound = 0;
+let urls;
+
+const fetchListVideo = () => {
+  return setInterval(async () => {
+    const listVideo = Array.from(
+      document.querySelectorAll(".tiktok-1s72ajp-DivWrapper > a")
+    );
+    urls = listVideo.map((v) => v.href);
+    const timeout = setTimeout(() => {
+      nbVideoFound = urls.length;
+    }, 1000);
+    window.scrollTo(0, document.body.scrollHeight);
+    console.log(`[*] ${urls.length} video found`);
+    downloadBtn.innerHTML = `Fetching video list...`;
+    const countElem = document.querySelector(".video-count");
+    countElem.innerHTML = `${urls.length} videos found`;
+
+    if (nbVideoFound === urls.length) {
       clearInterval(interval);
+      clearTimeout(timeout);
       window.scrollTo(0, 0);
-    });
-    interval = setInterval(async () => {
-      const listVideo = Array.from(
-        document.querySelectorAll(".tiktok-1s72ajp-DivWrapper > a")
-      );
-      const urls = listVideo.map((v) => v.href);
-      const timeout = setTimeout(() => {
-        videoFound = urls.length;
-      }, 1000);
-      window.scrollTo(0, document.body.scrollHeight);
-      console.log(`[*] ${urls.length} video found`);
-      const countElem = document.querySelector(".video-count");
-      const videoList = document.querySelector(".video-list");
-      countElem.innerHTML = `<p style="font-size: 16px; font-weight: 700;">${urls.length} videos found</p>`;
-      const videoData = await Promise.all(
-        urls.map(async (url) => {
-          const data = await getVideoNoWM(url);
-          return data;
-        })
-      );
-      videoList.innerHTML = renderListVideo(videoData);
-      if (videoFound === urls.length) {
-        const downloadBtn = document.querySelector(".down-load-button");
-        downloadBtn.addEventListener("click", async () => {
+      downloadBtn.innerHTML = `Get urls adn download (no WM)`;
+      downloadBtn.style["pointer-events"] = "all";
+      console.log("[X] No more video found");
+      downloadState = "ready";
+    }
+  }, 1500);
+};
+
+const getVideoUrl = async () => {
+  const videoList = document.querySelector(".video-list");
+  videoData = await Promise.all(
+    urls.map(async (url) => {
+      const data = await getVideoNoWM(url);
+      return data;
+    })
+  );
+  videoList.innerHTML = renderListVideo(videoData);
+};
+
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+  const accountName = document.querySelector(".tiktok-arkop9-H2ShareTitle");
+  const nickname = document.querySelector(".tiktok-qpyus6-H1ShareSubTitle");
+  if (
+    request.message === "tab-change" &&
+    request.tab.url.includes("/@") &&
+    !request.tab.url.includes("/video") &&
+    downloadState !== "downloading"
+  ) {
+    clearInterval(interval);
+    downloadState = "";
+    nbVideoFound = 0;
+    videoData = [];
+    const videoList = document.querySelector(".video-list");
+    const countElem = document.querySelector(".video-count");
+    const downloadedCountElem = document.querySelector(".downloaded-count");
+    downloadedCountElem.innerHTML = "";
+    videoList.innerHTML = `<div style="display: flex; align-items:center; justify-content: center; width: 100%; height: 50%;"><p style="font-size: 20px; font-weight: 700; text-align: center;">${accountName.textContent}(${nickname.textContent})</p></div>`;
+    countElem.innerHTML = `Click load button to start fetching video `;
+    downloadBtn.innerHTML = `Load Video`;
+  }
+  if (request.message === "start") {
+    install();
+    const videoList = document.querySelector(".video-list");
+    videoList.innerHTML = `<div style="display: flex; align-items:center; justify-content: center; width: 100%; height: 50%;"><p style="font-size: 20px; font-weight: 700; text-align: center;">${accountName.textContent}(${nickname.textContent})</p></div>`;
+    setTimeout(() => {
+      downloadBtn = document.querySelector(".down-load-button");
+      const closeButton = document.querySelector(".close-button");
+      closeButton.addEventListener("click", () => {
+        document.querySelector(".download-panel").remove();
+        downloadState = "";
+        nbVideoFound = 0;
+        videoData = [];
+        urls = [];
+        downloadedItems = [];
+        clearInterval(interval);
+        window.scrollTo(0, 0);
+      });
+      downloadBtn.addEventListener("click", async () => {
+        if (downloadState === "") {
+          interval = fetchListVideo();
+          downloadState = "in progress";
+          downloadBtn.innerHTML = `Fetching video list...`;
+        } else if (
+          downloadState === "ready" ||
+          downloadState === "download-again"
+        ) {
+          if (downloadState === "download-again") {
+            downloadedItems = [];
+          }
+          const downloadedCountElem =
+            document.querySelector(".downloaded-count");
+          cancelDownloadBtn = document.querySelector(".cancel-download");
+          cancelDownloadBtn.style.display = "block";
+          downloadedCountElem.innerHTML = `${downloadedItems.length}✅ / ${urls.length}`;
+          cancelDownloadBtn.innerHTML = `<button style="font-weight: 700;">Cancel</button>`;
+          cancelDownloadBtn.addEventListener("click", () => {
+            chrome.runtime.sendMessage({
+              msg: "cancel-download",
+            });
+            cancelDownloadBtn.style.display = "none";
+            downloadState = "";
+            downloadBtn.innerHTML = `Download canceled!`;
+            downloadBtn.style["background-color"] = "#efefef";
+            downloadBtn.style.color = "#000";
+            downloadBtn.style.border = "1px solid rgb(0 0 0 / 50%)";
+          });
           downloadBtn.innerHTML = `Downloading...`;
-          const response = await chrome.runtime.sendMessage({
+          downloadBtn.style["pointer-events"] = "none";
+          if (downloadState === "ready") {
+            await getVideoUrl();
+          }
+          downloadState = "downloading";
+          await chrome.runtime.sendMessage({
             msg: "download",
             data: videoData,
           });
-          console.log("response", response);
-        });
-        clearInterval(interval);
-        clearTimeout(timeout);
-        window.scrollTo(0, 0);
-        downloadBtn.innerHTML = `Download ${urls.length} videos`;
-        console.log("[X] No more video found");
-      }
-    }, 1500);
+        }
+      });
+    }, 1000);
+  }
+
+  if (request.message === "success") {
+    downloadedItems.push(request.item);
+    if (downloadedItems.length === videoData.length) {
+      document.querySelector(".cancel-download").remove();
+      downloadState = "";
+      downloadBtn.innerHTML = `Download Successfully !`;
+      downloadBtn.style["pointer-events"] = "all";
+      setTimeout(() => {
+        downloadBtn.innerHTML = `Download Again`;
+      }, 1000);
+    }
+    const downloadedCountElem = document.querySelector(".downloaded-count");
+    downloadedCountElem.innerHTML = `${downloadedItems.length}✅ / ${videoData.length}`;
+  }
+
+  if (request.message === "cancel-success") {
+    downloadState = "download-again";
+    downloadBtn.style["pointer-events"] = "all";
+    downloadBtn.innerHTML = `Download Again`;
+    downloadBtn.style["background-color"] = "#fe2d52";
+    downloadBtn.style.color = "#fff";
+    downloadBtn.style.border = "1px solid #fe2d52";
   }
 });

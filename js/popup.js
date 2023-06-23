@@ -26,16 +26,5 @@ const getListVideoByUsername = async (username) => {
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
-  userInput.addEventListener("input", (e) => {
-    username = e.target.value;
-  });
-
-  goToPage.addEventListener("click", async () => {
-    const tab = await getCurrentTab();
-    console.log(chrome.tabs, tab.id);
-    chrome.tabs.sendMessage(tab.id, {
-      message: "getData",
-      url: baseUrl + username,
-    });
-  });
+  registerOnChangeTabUpdate();
 });
